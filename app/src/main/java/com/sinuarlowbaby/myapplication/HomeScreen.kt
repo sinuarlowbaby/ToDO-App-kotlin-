@@ -4,12 +4,14 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.List // <--- IMPORTANT IMPORT
+import androidx.compose.material.icons.filled.Done
+import androidx.compose.material.icons.filled.List
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -20,29 +22,35 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.sinuarlowbaby.myapplication.ui.theme.*
+// Removed theme import to prevent errors if you haven't created the theme file yet.
 
-// Reusing colors from AddTodoScreen if they are in the same package
-// If FabBlue/TitleColor show red, ensure they are defined in AddTodoScreen.kt or Theme.kt
+// --- MISSING COLORS DEFINED HERE TO PREVENT CRASH ---
+val BackgroundColor = Color(0xFFF5F5F5) // Light Gray Background
+val TitleColor = Color(0xFF121212)      // Almost Black
+val SubtitleColor = Color(0xFF757575)   // Dark Gray
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     todoList: List<TodoItem>,
-    currentSort: SortOption,        // <--- NEW PARAMETER
-    onSortSelected: (SortOption) -> Unit, // <--- NEW PARAMETER
+    currentSort: SortOption,
+    currentFilter: String,
+    onSortSelected: (SortOption) -> Unit,
+    onFilterSelected: (String) -> Unit,
     onFabClick: () -> Unit,
     onToggle: (TodoItem) -> Unit,
     onDelete: (TodoItem) -> Unit
 ) {
-    // State for the dropdown menu visibility
     var sortMenuExpanded by remember { mutableStateOf(false) }
 
+    val filterOptions = listOf("All", "Personal", "Work", "Study")
+
     Scaffold(
-        containerColor = BackgroundColor, // Ensure this is defined or use Color(0xFFF5F5F5)
+        containerColor = BackgroundColor,
         floatingActionButton = {
             FloatingActionButton(
                 onClick = onFabClick,
-                containerColor = FabBlue, // Ensure FabBlue is visible from AddTodoScreen
+                containerColor = FabBlue, // Defined in AddTodoScreen.kt, make sure they are in same package
                 contentColor = Color.White,
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.size(64.dp)
@@ -59,7 +67,7 @@ fun HomeScreen(
         ) {
             Spacer(modifier = Modifier.height(20.dp))
 
-            // --- HEADER ROW WITH SORT BUTTON ---
+            // --- HEADER ROW ---
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -70,11 +78,10 @@ fun HomeScreen(
                     style = MaterialTheme.typography.headlineLarge.copy(
                         fontWeight = FontWeight.Bold,
                         fontSize = 40.sp,
-                        color = TitleColor // Ensure this is defined or use Color.Black
+                        color = TitleColor
                     )
                 )
 
-                // SORT BUTTON & MENU
                 Box {
                     IconButton(onClick = { sortMenuExpanded = true }) {
                         Icon(
@@ -90,7 +97,6 @@ fun HomeScreen(
                         onDismissRequest = { sortMenuExpanded = false },
                         modifier = Modifier.background(Color.White)
                     ) {
-                        // Loop through all Sort Options
                         SortOption.values().forEach { option ->
                             DropdownMenuItem(
                                 text = {
@@ -106,7 +112,6 @@ fun HomeScreen(
                                     onSortSelected(option)
                                     sortMenuExpanded = false
                                 },
-                                // Highlight the currently selected option
                                 colors = MenuDefaults.itemColors(
                                     textColor = if(currentSort == option) FabBlue else Color.Black
                                 )
@@ -116,7 +121,38 @@ fun HomeScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // --- FILTER CHIPS ROW ---
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                items(filterOptions) { filter ->
+                    val isSelected = currentFilter == filter
+                    FilterChip(
+                        selected = isSelected,
+                        onClick = { onFilterSelected(filter) },
+                        label = { Text(filter) },
+                        leadingIcon = if (isSelected) {
+                            {
+                                Icon(
+                                    imageVector = Icons.Filled.Done,
+                                    contentDescription = "Selected",
+                                    modifier = Modifier.size(FilterChipDefaults.IconSize)
+                                )
+                            }
+                        } else null,
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = FabBlue.copy(alpha = 0.2f),
+                            selectedLabelColor = FabBlue,
+                            selectedLeadingIconColor = FabBlue
+                        )
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
 
             if (todoList.isEmpty()) {
                 // EMPTY STATE
@@ -125,7 +161,8 @@ fun HomeScreen(
                     verticalArrangement = Arrangement.Center,
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Ensure you have R.drawable.no_data or remove/change this
+                    // Make sure you have a drawable named "no_data" in res/drawable
+                    // If not, delete this Image block to stop the crash
                     Image(
                         painter = painterResource(id = R.drawable.no_data),
                         contentDescription = "Empty",
@@ -133,7 +170,7 @@ fun HomeScreen(
                     )
                     Spacer(modifier = Modifier.height(24.dp))
                     Text(
-                        text = "Todos you add will appear here",
+                        text = "No tasks found",
                         style = MaterialTheme.typography.bodyLarge.copy(color = SubtitleColor, fontSize = 16.sp)
                     )
                     Spacer(modifier = Modifier.height(80.dp))
@@ -170,9 +207,7 @@ fun TodoItemCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Row(
-            modifier = Modifier
-                .padding(12.dp)
-                .fillMaxWidth(),
+            modifier = Modifier.padding(12.dp).fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Checkbox(
@@ -181,11 +216,7 @@ fun TodoItemCard(
                 colors = CheckboxDefaults.colors(checkedColor = FabBlue)
             )
 
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 8.dp)
-            ) {
+            Column(modifier = Modifier.weight(1f).padding(horizontal = 8.dp)) {
                 Text(
                     text = item.title,
                     fontSize = 18.sp,
@@ -194,25 +225,23 @@ fun TodoItemCard(
                     textDecoration = if (item.isDone) TextDecoration.LineThrough else null
                 )
 
-                val priorityText = when(item.priority) {
-                    0 -> "Low Priority"
-                    1 -> "Medium Priority"
-                    else -> "High Priority"
+                // Show Priority AND Label
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    val priorityText = when(item.priority) {
+                        0 -> "Low"
+                        1 -> "Medium"
+                        else -> "High"
+                    }
+                    Text(
+                        text = "$priorityText • ${item.label}",
+                        fontSize = 12.sp,
+                        color = if (item.isDone) Color.LightGray else Color.Gray
+                    )
                 }
-
-                Text(
-                    text = priorityText,
-                    fontSize = 12.sp,
-                    color = if (item.isDone) Color.LightGray else Color.Gray
-                )
             }
 
             IconButton(onClick = onDelete) {
-                Icon(
-                    imageVector = Icons.Default.Delete,
-                    contentDescription = "Delete",
-                    tint = Color(0xFFFF5252)
-                )
+                Icon(Icons.Default.Delete, "Delete", tint = Color(0xFFFF5252))
             }
         }
     }

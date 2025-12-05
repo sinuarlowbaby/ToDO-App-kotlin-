@@ -56,26 +56,40 @@ fun AddTodoScreen(onBackClick: () -> Unit, onSave: (String, String, Int) -> Unit
         Column(modifier = Modifier.fillMaxSize().padding(innerPadding).padding(horizontal = 24.dp)) {
             Spacer(modifier = Modifier.height(30.dp))
             Text("To-do", style = MaterialTheme.typography.bodyMedium.copy(color = LabelGray), modifier = Modifier.padding(bottom = 8.dp))
+
+            // --- CHANGED HERE: Added Text Colors ---
             OutlinedTextField(
                 value = taskText,
                 onValueChange = { taskText = it },
                 placeholder = { Text("What needs to be done?", color = Color.Gray) },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(8.dp),
-                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = FabBlue, unfocusedBorderColor = LightGrayBorder)
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = FabBlue,
+                    unfocusedBorderColor = LightGrayBorder,
+                    focusedTextColor = Color.Black,   // Change text to Black when typing
+                    unfocusedTextColor = Color.Black, // Change text to Black when not focused
+                    cursorColor = Color.Black         // Change cursor to Black
+                )
             )
             Spacer(modifier = Modifier.height(24.dp))
 
             Text("Label", style = MaterialTheme.typography.bodyMedium.copy(color = LabelGray), modifier = Modifier.padding(bottom = 8.dp))
             Box(modifier = Modifier.fillMaxWidth()) {
+                // --- CHANGED HERE: Added Text Colors ---
                 OutlinedTextField(
                     value = selectedLabel,
                     onValueChange = {},
                     readOnly = true,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(8.dp),
-                    trailingIcon = { Icon(Icons.Default.KeyboardArrowDown, null, tint = Color.Gray) },
-                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = FabBlue, unfocusedBorderColor = LightGrayBorder)
+                    trailingIcon = { Icon(Icons.Default.KeyboardArrowDown, null, tint = Color.Black) },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = FabBlue,
+                        unfocusedBorderColor = LightGrayBorder,
+                        focusedTextColor = Color.Black,   // Change label text to Black
+                        unfocusedTextColor = Color.Black  // Change label text to Black
+                    )
                 )
                 Box(modifier = Modifier.matchParentSize().clickable { expanded = true })
                 DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, modifier = Modifier.background(Color.White)) {

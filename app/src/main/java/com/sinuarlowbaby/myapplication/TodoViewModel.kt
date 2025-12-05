@@ -5,7 +5,6 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
-// 1. Define Sort Options
 enum class SortOption {
     NEWEST_FIRST,
     OLDEST_FIRST,
@@ -15,20 +14,34 @@ enum class SortOption {
 
 class TodoViewModel(private val dao: TodoDao) : ViewModel() {
 
-    // 2. Sort State
+    // 1. Sort State
     private val _sortOption = MutableStateFlow(SortOption.NEWEST_FIRST)
     val currentSortOption: StateFlow<SortOption> = _sortOption
 
-    // 3. Combine Database data + Sort Option
+    // 2. Filter State (New) -> Default is "All"
+    private val _filterLabel = MutableStateFlow("All")
+    val currentFilterLabel: StateFlow<String> = _filterLabel
+
+    // 3. Combine Database + Sort + Filter
     val todoList: StateFlow<List<TodoItem>> = combine(
         dao.getAllTodos(),
-        _sortOption
-    ) { list, sortOrder ->
+        _sortOption,
+        _filterLabel // Add filter to the combination
+    ) { list, sortOrder, filterLabel ->
+
+        // Step A: Apply Filter
+        val filteredList = if (filterLabel == "All") {
+            list
+        } else {
+            list.filter { it.label == filterLabel }
+        }
+
+        // Step B: Apply Sort to the filtered list
         when (sortOrder) {
-            SortOption.NEWEST_FIRST -> list.sortedByDescending { it.date }
-            SortOption.OLDEST_FIRST -> list.sortedBy { it.date }
-            SortOption.PRIORITY_HIGH -> list.sortedByDescending { it.priority }
-            SortOption.PRIORITY_LOW -> list.sortedBy { it.priority }
+            SortOption.NEWEST_FIRST -> filteredList.sortedByDescending { it.date }
+            SortOption.OLDEST_FIRST -> filteredList.sortedBy { it.date }
+            SortOption.PRIORITY_HIGH -> filteredList.sortedByDescending { it.priority }
+            SortOption.PRIORITY_LOW -> filteredList.sortedBy { it.priority }
         }
     }.stateIn(
         scope = viewModelScope,
@@ -53,5 +66,10 @@ class TodoViewModel(private val dao: TodoDao) : ViewModel() {
 
     fun onSortOptionChanged(option: SortOption) {
         _sortOption.value = option
+    }
+
+    // New function to update filter
+    fun onFilterChanged(label: String) {
+        _filterLabel.value = label
     }
 }

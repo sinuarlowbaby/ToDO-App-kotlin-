@@ -23,10 +23,10 @@ class MainActivity : ComponentActivity() {
         val dao = database.todoDao()
 
         setContent {
+            // IF "ToDoTheme" is red, change it to "MyApplicationTheme"
             ToDoTheme {
                 val navController = rememberNavController()
 
-                // Create ViewModel Factory
                 val viewModel = viewModel<TodoViewModel>(
                     factory = object : ViewModelProvider.Factory {
                         override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -39,11 +39,15 @@ class MainActivity : ComponentActivity() {
                     composable("home") {
                         val todoList by viewModel.todoList.collectAsState()
                         val currentSort by viewModel.currentSortOption.collectAsState()
+                        // Collect filter state
+                        val currentFilter by viewModel.currentFilterLabel.collectAsState()
 
                         HomeScreen(
                             todoList = todoList,
                             currentSort = currentSort,
+                            currentFilter = currentFilter, // Pass filter state
                             onSortSelected = { viewModel.onSortOptionChanged(it) },
+                            onFilterSelected = { viewModel.onFilterChanged(it) }, // Pass filter action
                             onFabClick = { navController.navigate("add") },
                             onToggle = { viewModel.toggleTodoCompletion(it) },
                             onDelete = { viewModel.removeTodo(it) }
