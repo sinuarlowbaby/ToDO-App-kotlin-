@@ -10,6 +10,6 @@ data class TodoItem(
     val title: String,
     val label: String,
     val priority: Int, // 0 = Low, 1 = Medium, 2 = High
-    val date: Long = System.currentTimeMillis(), // Stored as timestamp
+    val date: Long = System.currentTimeMillis(),
     val isDone: Boolean = false
 )

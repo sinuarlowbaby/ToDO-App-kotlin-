@@ -1,191 +1,326 @@
 package com.sinuarlowbaby.myapplication
 
-import androidx.compose.foundation.Image
+import android.app.Activity
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Done
-import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-// Removed theme import to prevent errors if you haven't created the theme file yet.
+import androidx.core.view.WindowCompat
 
-// --- MISSING COLORS DEFINED HERE TO PREVENT CRASH ---
-val BackgroundColor = Color(0xFFF5F5F5) // Light Gray Background
-val TitleColor = Color(0xFF121212)      // Almost Black
-val SubtitleColor = Color(0xFF757575)   // Dark Gray
+// ---- LIGHT COLORS ----
+val LightBackground = Color(0xFFF7F8FA)
+val LightTitle = Color(0xFF0F172A)
+val LightSubtitle = Color(0xFF64748B)
+val LightCard = Color(0xFFFFFFFF)
+
+// ---- DARK COLORS ----
+val DarkBackground = Color(0xFF0B1220)
+val DarkTitle = Color(0xFFE5E7EB)
+val DarkSubtitle = Color(0xFF9CA3AF)
+val DarkCard = Color(0xFF111827)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-    todoList: List<TodoItem>,
-    currentSort: SortOption,
-    currentFilter: String,
-    onSortSelected: (SortOption) -> Unit,
-    onFilterSelected: (String) -> Unit,
-    onFabClick: () -> Unit,
-    onToggle: (TodoItem) -> Unit,
-    onDelete: (TodoItem) -> Unit
+    viewModel: TodoViewModel,
+    onAddClick: () -> Unit,
+    onEditClick: (TodoItem) -> Unit
 ) {
-    var sortMenuExpanded by remember { mutableStateOf(false) }
+    val todoList by viewModel.todoList.collectAsState()
+    val searchText by viewModel.searchQuery.collectAsState()
+    val currentSort by viewModel.currentSortOption.collectAsState()
+    val currentFilter by viewModel.currentFilterLabel.collectAsState()
 
-    val filterOptions = listOf("All", "Personal", "Work", "Study")
+    val haptic = LocalHapticFeedback.current
+
+    var sortMenuExpanded by remember { mutableStateOf(false) }
+    var isSearchExpanded by remember { mutableStateOf(false) }
+
+    // --- FIX START: Use ViewModel state directly ---
+    // Remove local 'remember' state. Listen to the VM.
+    val isDark by viewModel.isDarkTheme.collectAsState()
+
+    // Remove LaunchedEffect(Unit) { viewModel.setDarkTheme... }
+    // because it resets the theme every time you navigate back here.
+    // --- FIX END ---
+
+    val themeRotation by animateFloatAsState(
+        targetValue = if (isDark) 180f else 0f,
+        label = "themeRotation"
+    )
+
+    val themeScale by animateFloatAsState(
+        targetValue = if (isDark) 1.1f else 1f,
+        label = "themeScale"
+    )
+
+    val backgroundColor = if (isDark) DarkBackground else LightBackground
+    val titleColor = if (isDark) DarkTitle else LightTitle
+    val subtitleColor = if (isDark) DarkSubtitle else LightSubtitle
+    val cardColor = if (isDark) DarkCard else LightCard
+
+    // ---- STATUS BAR ICON COLOR FIX ----
+    val view = LocalView.current
+    SideEffect {
+        val window = (view.context as Activity).window
+        WindowCompat.getInsetsController(window, view)
+            .isAppearanceLightStatusBars = !isDark
+        // Set status bar color
+        window.statusBarColor = backgroundColor.toArgb()
+    }
+
+    val filterOptions = listOf("All", "Personal", "Work", "Study", "Groceries", "Health")
 
     Scaffold(
-        containerColor = BackgroundColor,
+        containerColor = backgroundColor,
         floatingActionButton = {
             FloatingActionButton(
-                onClick = onFabClick,
-                containerColor = FabBlue, // Defined in AddTodoScreen.kt, make sure they are in same package
+                onClick = onAddClick,
+                containerColor = FabBlue,
                 contentColor = Color.White,
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(18.dp),
                 modifier = Modifier.size(64.dp)
             ) {
-                Icon(Icons.Default.Add, contentDescription = "Add", modifier = Modifier.size(32.dp))
+                Icon(Icons.Default.Add, contentDescription = "Add", modifier = Modifier.size(30.dp))
             }
         }
     ) { innerPadding ->
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(horizontal = 24.dp)
+                .padding(horizontal = 20.dp)
         ) {
-            Spacer(modifier = Modifier.height(20.dp))
 
-            // --- HEADER ROW ---
+            // ---- HEADER ROW ----
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "Todos",
-                    style = MaterialTheme.typography.headlineLarge.copy(
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 40.sp,
-                        color = TitleColor
+                Column {
+                    Text(
+                        text = "My Tasks",
+                        style = MaterialTheme.typography.headlineMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = titleColor
+                        )
                     )
-                )
+                    Text(
+                        text = "Stay productive today",
+                        fontSize = 13.sp,
+                        color = subtitleColor
+                    )
+                }
 
-                Box {
-                    IconButton(onClick = { sortMenuExpanded = true }) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+
+                    // 🔍 SEARCH ICON
+                    IconButton(onClick = { isSearchExpanded = !isSearchExpanded }) {
                         Icon(
-                            imageVector = Icons.Default.List,
-                            contentDescription = "Sort",
-                            modifier = Modifier.size(32.dp),
-                            tint = TitleColor
+                            imageVector = Icons.Default.Search,
+                            contentDescription = "Search",
+                            tint = titleColor
                         )
                     }
 
-                    DropdownMenu(
-                        expanded = sortMenuExpanded,
-                        onDismissRequest = { sortMenuExpanded = false },
-                        modifier = Modifier.background(Color.White)
+                    // 🌙 THEME TOGGLE
+                    IconButton(onClick = {
+                        viewModel.toggleTheme()
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)}
                     ) {
-                        SortOption.values().forEach { option ->
-                            DropdownMenuItem(
-                                text = {
-                                    val label = when(option) {
-                                        SortOption.NEWEST_FIRST -> "Date: Newest"
-                                        SortOption.OLDEST_FIRST -> "Date: Oldest"
-                                        SortOption.PRIORITY_HIGH -> "Priority: High"
-                                        SortOption.PRIORITY_LOW -> "Priority: Low"
+                        Icon(
+                            imageVector = if (isDark) Icons.Default.LightMode else Icons.Default.DarkMode,
+                            contentDescription = "Toggle theme",
+                            tint = titleColor,
+                            modifier = Modifier.graphicsLayer {
+                                rotationZ = themeRotation   // 🔄 spin
+                                scaleX = themeScale         // 🔍 small zoom
+                                scaleY = themeScale
+                            }
+                        )
+                    }
+
+                    // ⬇ SORT ICON
+                    Box {
+                        IconButton(onClick = { sortMenuExpanded = true }) {
+                            Icon(Icons.Default.ArrowDropDown, "Sort", tint = titleColor)
+                        }
+
+                        DropdownMenu(
+                            expanded = sortMenuExpanded,
+                            onDismissRequest = { sortMenuExpanded = false },
+                            modifier = Modifier.background(cardColor)
+                        ) {
+                            SortOption.entries.forEach { option ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            option.name.replace("_", " "),
+                                            color = titleColor
+                                        )
+                                    },
+                                    onClick = {
+                                        viewModel.onSortOptionChanged(option)
+                                        sortMenuExpanded = false
                                     }
-                                    Text(label)
-                                },
-                                onClick = {
-                                    onSortSelected(option)
-                                    sortMenuExpanded = false
-                                },
-                                colors = MenuDefaults.itemColors(
-                                    textColor = if(currentSort == option) FabBlue else Color.Black
                                 )
-                            )
+                            }
                         }
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            // ---- EXPANDABLE SEARCH BAR (ABOVE FILTERS) ----
+            AnimatedVisibility(visible = isSearchExpanded) {
+                TextField(
+                    value = searchText,
+                    onValueChange = viewModel::onSearchQueryChanged,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 14.dp),
+                    placeholder = { Text("Search your tasks...") },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = cardColor,
+                        unfocusedContainerColor = cardColor,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        focusedTextColor = titleColor,
+                        unfocusedTextColor = titleColor,
+                        focusedPlaceholderColor = subtitleColor,
+                        unfocusedPlaceholderColor = subtitleColor,
+                        focusedLeadingIconColor = subtitleColor,
+                        unfocusedLeadingIconColor = subtitleColor,
+                        cursorColor = FabBlue
+                    ),
+                    shape = RoundedCornerShape(14.dp),
+                    singleLine = true
+                )
+            }
 
-            // --- FILTER CHIPS ROW ---
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth()
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // ---- FILTER CHIPS ----
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                items(filterOptions) { filter ->
-                    val isSelected = currentFilter == filter
-                    FilterChip(
-                        selected = isSelected,
-                        onClick = { onFilterSelected(filter) },
-                        label = { Text(filter) },
-                        leadingIcon = if (isSelected) {
-                            {
-                                Icon(
-                                    imageVector = Icons.Filled.Done,
-                                    contentDescription = "Selected",
-                                    modifier = Modifier.size(FilterChipDefaults.IconSize)
+
+                // Categories (Filter Chips)
+                LazyRow(
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    items(filterOptions) { filter ->
+                        val isSelected = currentFilter == filter
+
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = {
+                                viewModel.onFilterChanged(filter)
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            },
+                            label = {
+                                Text(
+                                    filter,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium
                                 )
-                            }
-                        } else null,
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = FabBlue.copy(alpha = 0.2f),
-                            selectedLabelColor = FabBlue,
-                            selectedLeadingIconColor = FabBlue
+                            },
+                            shape = RoundedCornerShape(18.dp),
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = FabBlue.copy(alpha = 0.16f),
+                                selectedLabelColor = FabBlue,
+                                containerColor = Color.Transparent,
+                                labelColor = subtitleColor
+                            )
                         )
-                    )
+                    }
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(18.dp))
 
-            if (todoList.isEmpty()) {
-                // EMPTY STATE
-                Column(
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    // Make sure you have a drawable named "no_data" in res/drawable
-                    // If not, delete this Image block to stop the crash
-                    Image(
-                        painter = painterResource(id = R.drawable.no_data),
-                        contentDescription = "Empty",
-                        modifier = Modifier.size(250.dp)
+            // ---- TODO LIST ----
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                items(items = todoList, key = { it.id }) { item ->
+
+                    val dismissState = rememberSwipeToDismissBoxState(
+                        confirmValueChange = {
+                            if (it == SwipeToDismissBoxValue.EndToStart) {
+                                viewModel.deleteTodo(item)
+                                true
+                            } else false
+                        }
                     )
-                    Spacer(modifier = Modifier.height(24.dp))
-                    Text(
-                        text = "No tasks found",
-                        style = MaterialTheme.typography.bodyLarge.copy(color = SubtitleColor, fontSize = 16.sp)
-                    )
-                    Spacer(modifier = Modifier.height(80.dp))
-                }
-            } else {
-                // LIST STATE
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(todoList, key = { it.id }) { item ->
+
+                    SwipeToDismissBox(
+                        state = dismissState,
+                        backgroundContent = {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(Color(0xFFEF4444), RoundedCornerShape(16.dp))
+                                    .padding(end = 16.dp),
+                                contentAlignment = Alignment.CenterEnd
+                            ) {
+                                Icon(Icons.Default.Delete, "Delete", tint = Color.White)
+                            }
+                        }
+                    ) {
                         TodoItemCard(
                             item = item,
-                            onToggle = { onToggle(item) },
-                            onDelete = { onDelete(item) }
+                            onToggle = {
+                                viewModel.toggleTodoCompletion(item)
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            },
+                            onClick = {
+                                onEditClick(item)
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            },
+                            onDelete = {
+                                viewModel.deleteTodo(item)
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            },
+                            titleColor = titleColor,
+                            subtitleColor = subtitleColor,
+                            cardColor = cardColor
                         )
                     }
                 }
@@ -198,16 +333,24 @@ fun HomeScreen(
 fun TodoItemCard(
     item: TodoItem,
     onToggle: () -> Unit,
-    onDelete: () -> Unit
+    onClick: () -> Unit,
+    onDelete: () -> Unit,
+    titleColor: Color,
+    subtitleColor: Color,
+    cardColor: Color
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = cardColor),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Row(
-            modifier = Modifier.padding(12.dp).fillMaxWidth(),
+            modifier = Modifier
+                .padding(14.dp)
+                .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Checkbox(
@@ -216,32 +359,43 @@ fun TodoItemCard(
                 colors = CheckboxDefaults.colors(checkedColor = FabBlue)
             )
 
-            Column(modifier = Modifier.weight(1f).padding(horizontal = 8.dp)) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = 10.dp)
+            ) {
                 Text(
                     text = item.title,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (item.isDone) Color.Gray else Color.Black,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (item.isDone) subtitleColor else titleColor,
                     textDecoration = if (item.isDone) TextDecoration.LineThrough else null
                 )
 
-                // Show Priority AND Label
+                Spacer(modifier = Modifier.height(4.dp))
+
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    val priorityText = when(item.priority) {
-                        0 -> "Low"
-                        1 -> "Medium"
-                        else -> "High"
-                    }
+                    Box(
+                        modifier = Modifier
+                            .size(9.dp)
+                            .clip(CircleShape)
+                            .background(
+                                when (item.priority) {
+                                    0 -> Color(0xFF22C55E)
+                                    1 -> Color(0xFFFACC15)
+                                    else -> Color(0xFFEF4444)
+                                }
+                            )
+                    )
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
                     Text(
-                        text = "$priorityText • ${item.label}",
+                        text = item.label,
                         fontSize = 12.sp,
-                        color = if (item.isDone) Color.LightGray else Color.Gray
+                        color = subtitleColor
                     )
                 }
-            }
-
-            IconButton(onClick = onDelete) {
-                Icon(Icons.Default.Delete, "Delete", tint = Color(0xFFFF5252))
             }
         }
     }

@@ -5,8 +5,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -23,93 +23,201 @@ val LabelGray = Color(0xFF828282)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddTodoScreen(onBackClick: () -> Unit, onSave: (String, String, Int) -> Unit) {
+fun AddTodoScreen(
+    viewModel: TodoViewModel,
+    taskId: Int?, // If null, we are adding. If not null, we are editing.
+    onBackClick: () -> Unit
+) {
+    val isDark by viewModel.isDarkTheme.collectAsState()
+
+    val backgroundColor = if (isDark) DarkBackground else Color.White
+    val titleColor = if (isDark) DarkTitle else Color.Black
+    val labelColor = if (isDark) DarkSubtitle else LabelGray
+    val fieldBorderColor = if (isDark) DarkSubtitle else LightGrayBorder
+    val textColor = if (isDark) DarkTitle else Color.Black
+
+
     var taskText by remember { mutableStateOf("") }
-    var sliderPosition by remember { mutableFloatStateOf(0f) }
-    var expanded by remember { mutableStateOf(false) }
     var selectedLabel by remember { mutableStateOf("Personal") }
-    val labels = listOf("Personal", "Work", "Study")
+    var sliderPosition by remember { mutableFloatStateOf(0f) }
+    var isLoaded by remember { mutableStateOf(false) }
+
+    // Load data if editing
+    LaunchedEffect(taskId) {
+        if (taskId != null && taskId != -1) {
+            val todo = viewModel.getTodoById(taskId)
+            todo?.let {
+                taskText = it.title
+                selectedLabel = it.label
+                sliderPosition = it.priority.toFloat()
+            }
+        }
+        isLoaded = true
+    }
+
+    var expanded by remember { mutableStateOf(false) }
+    val labels = listOf("Personal", "Work", "Study", "Groceries", "Health")
 
     Scaffold(
-        containerColor = Color.White,
+        containerColor = backgroundColor,
         topBar = {
             Row(
-                modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(top = 16.dp, start = 24.dp, end = 16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(top = 16.dp, start = 24.dp, end = 16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Add Task", style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold, fontSize = 32.sp))
+                Text(
+                    text = if (taskId == null || taskId == -1) "Add Task" else "Edit Task",
+                    style = MaterialTheme.typography.headlineLarge.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 32.sp,
+                        color = titleColor
+                    )
+                )
                 IconButton(onClick = onBackClick) {
-                    Icon(Icons.Default.Close, "Close", modifier = Modifier.size(32.dp), tint = Color.Black)
+                    Icon(
+                        Icons.Default.Close,
+                        "Close",
+                        modifier = Modifier.size(32.dp),
+                        tint = titleColor
+                    )
                 }
             }
         },
         bottomBar = {
             Button(
-                onClick = { if (taskText.isNotBlank()) onSave(taskText, selectedLabel, sliderPosition.toInt()) },
-                modifier = Modifier.fillMaxWidth().padding(24.dp).height(56.dp),
+                onClick = {
+                    if (taskText.isNotBlank()) {
+                        viewModel.saveTodo(
+                            taskText,
+                            selectedLabel,
+                            sliderPosition.toInt(),
+                            if (taskId == -1) null else taskId
+                        )
+                        onBackClick()
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp)
+                    .height(56.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = FabBlue),
                 shape = RoundedCornerShape(12.dp)
-            ) { Text("Done", fontSize = 18.sp) }
+            ) {
+                Text(if (taskId == null || taskId == -1) "Done" else "Update", fontSize = 18.sp)
+            }
         }
-    ) { innerPadding ->
-        Column(modifier = Modifier.fillMaxSize().padding(innerPadding).padding(horizontal = 24.dp)) {
-            Spacer(modifier = Modifier.height(30.dp))
-            Text("To-do", style = MaterialTheme.typography.bodyMedium.copy(color = LabelGray), modifier = Modifier.padding(bottom = 8.dp))
+    )
+    { innerPadding ->
+        if (isLoaded) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .padding(horizontal = 24.dp)
+            ) {
+                Spacer(modifier = Modifier.height(30.dp))
 
-            // --- CHANGED HERE: Added Text Colors ---
-            OutlinedTextField(
-                value = taskText,
-                onValueChange = { taskText = it },
-                placeholder = { Text("What needs to be done?", color = Color.Gray) },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(8.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = FabBlue,
-                    unfocusedBorderColor = LightGrayBorder,
-                    focusedTextColor = Color.Black,   // Change text to Black when typing
-                    unfocusedTextColor = Color.Black, // Change text to Black when not focused
-                    cursorColor = Color.Black         // Change cursor to Black
+                // Task Input
+                Text(
+                    "To-do",
+                    style = MaterialTheme.typography.bodyMedium.copy(color = labelColor),
+                    modifier = Modifier.padding(bottom = 8.dp)
                 )
-            )
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Text("Label", style = MaterialTheme.typography.bodyMedium.copy(color = LabelGray), modifier = Modifier.padding(bottom = 8.dp))
-            Box(modifier = Modifier.fillMaxWidth()) {
-                // --- CHANGED HERE: Added Text Colors ---
                 OutlinedTextField(
-                    value = selectedLabel,
-                    onValueChange = {},
-                    readOnly = true,
+                    value = taskText,
+                    onValueChange = { taskText = it },
+                    placeholder = { Text("What needs to be done?", color = if (isDark) DarkSubtitle else Color.Gray) },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(8.dp),
-                    trailingIcon = { Icon(Icons.Default.KeyboardArrowDown, null, tint = Color.Black) },
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = FabBlue,
-                        unfocusedBorderColor = LightGrayBorder,
-                        focusedTextColor = Color.Black,   // Change label text to Black
-                        unfocusedTextColor = Color.Black  // Change label text to Black
+                        unfocusedBorderColor = fieldBorderColor,
+                        focusedTextColor = textColor,
+                        unfocusedTextColor = textColor,
+                        cursorColor = FabBlue
                     )
                 )
-                Box(modifier = Modifier.matchParentSize().clickable { expanded = true })
-                DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, modifier = Modifier.background(Color.White)) {
-                    labels.forEach { label ->
-                        DropdownMenuItem(text = { Text(label) }, onClick = { selectedLabel = label; expanded = false })
+
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Label Input (Editable + Dropdown)
+
+                Text(
+                    "Label",
+                    style = MaterialTheme.typography.bodyMedium.copy(color = labelColor),
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    OutlinedTextField(
+                        value = selectedLabel,
+                        onValueChange = { selectedLabel = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        trailingIcon = {
+                            IconButton(onClick = { expanded = true }) {
+                                Icon(Icons.Default.ArrowDropDown, null, tint = textColor)
+                            }
+                        },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = FabBlue,
+                            unfocusedBorderColor = fieldBorderColor,
+                            focusedTextColor = textColor,
+                            unfocusedTextColor = textColor,
+                            cursorColor = FabBlue
+                        )
+                    )
+
+                    DropdownMenu(
+                        expanded = expanded,
+                        onDismissRequest = { expanded = false },
+                        modifier = Modifier.background(if (isDark) DarkCard else Color.White)
+                    ) {
+                        labels.forEach { label ->
+                            DropdownMenuItem(
+                                text = { Text(label, color = textColor) },
+                                onClick = { selectedLabel = label; expanded = false }
+                            )
+                        }
                     }
                 }
-            }
-            Spacer(modifier = Modifier.height(24.dp))
 
-            Text("Priority", style = MaterialTheme.typography.bodyMedium.copy(color = LabelGray), modifier = Modifier.padding(bottom = 8.dp))
-            Slider(
-                value = sliderPosition,
-                onValueChange = { sliderPosition = it },
-                valueRange = 0f..2f,
-                steps = 1,
-                colors = SliderDefaults.colors(thumbColor = FabBlue, activeTrackColor = FabBlue, inactiveTrackColor = LightGrayBorder)
-            )
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Low", color = LabelGray); Text("Medium", color = LabelGray); Text("High", color = LabelGray)
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Priority Slider
+                Text(
+                    "Priority",
+                    style = MaterialTheme.typography.bodyMedium.copy(color = labelColor),
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+
+                Slider(
+                    value = sliderPosition,
+                    onValueChange = { sliderPosition = it },
+                    valueRange = 0f..2f,
+                    steps = 1,
+                    colors = SliderDefaults.colors(
+                        thumbColor = FabBlue,
+                        activeTrackColor = FabBlue,
+                        inactiveTrackColor = fieldBorderColor
+                    )
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Low", color = labelColor)
+                    Text("Medium", color = labelColor)
+                    Text("High", color = labelColor)
+                }
+
             }
         }
     }

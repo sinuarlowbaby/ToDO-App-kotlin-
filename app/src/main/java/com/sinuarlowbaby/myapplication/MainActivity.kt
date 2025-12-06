@@ -3,65 +3,65 @@ package com.sinuarlowbaby.myapplication
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.sinuarlowbaby.myapplication.ui.theme.ToDoTheme
+import androidx.navigation.navArgument
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
-
-        val database = AppDatabase.getDatabase(applicationContext)
-        val dao = database.todoDao()
-
         setContent {
-            // IF "ToDoTheme" is red, change it to "MyApplicationTheme"
-            ToDoTheme {
-                val navController = rememberNavController()
+            // Setup Database and ViewModel
+            val context = LocalContext.current
+            val db = AppDatabase.getDatabase(context)
+            val viewModel: TodoViewModel = viewModel(factory = TodoViewModelFactory(db.todoDao()))
 
-                val viewModel = viewModel<TodoViewModel>(
-                    factory = object : ViewModelProvider.Factory {
-                        override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                            return TodoViewModel(dao) as T
-                        }
-                    }
-                )
+            // --- FIX START: Initialize Theme ONCE here ---
+            val systemDark = isSystemInDarkTheme()
+            // We only set this if the ViewModel hasn't been initialized yet.
+            // Since this runs once on app launch, we can just set it.
+            // (If you want to persist across app restarts, you'd need SharedPreferences/DataStore,
+            // but for now, this fixes the session persistence).
+            if (viewModel.isDarkTheme.value == false && !systemDark) {
+                // Do nothing, default is false
+            } else if (viewModel.isDarkTheme.value == false && systemDark) {
+                viewModel.setDarkTheme(true)
+            }
+            // --- FIX END ---
 
-                NavHost(navController = navController, startDestination = "home") {
-                    composable("home") {
-                        val todoList by viewModel.todoList.collectAsState()
-                        val currentSort by viewModel.currentSortOption.collectAsState()
-                        // Collect filter state
-                        val currentFilter by viewModel.currentFilterLabel.collectAsState()
+            val navController = rememberNavController()
 
-                        HomeScreen(
-                            todoList = todoList,
-                            currentSort = currentSort,
-                            currentFilter = currentFilter, // Pass filter state
-                            onSortSelected = { viewModel.onSortOptionChanged(it) },
-                            onFilterSelected = { viewModel.onFilterChanged(it) }, // Pass filter action
-                            onFabClick = { navController.navigate("add") },
-                            onToggle = { viewModel.toggleTodoCompletion(it) },
-                            onDelete = { viewModel.removeTodo(it) }
-                        )
-                    }
-                    composable("add") {
-                        AddTodoScreen(
-                            onBackClick = { navController.popBackStack() },
-                            onSave = { title, label, priority ->
-                                viewModel.addTodo(title, label, priority)
-                                navController.popBackStack()
-                            }
-                        )
-                    }
+            NavHost(navController = navController, startDestination = "home") {
+
+                // 1. Home Screen
+                composable("home") {
+                    HomeScreen(
+                        viewModel = viewModel,
+                        onAddClick = { navController.navigate("add") },
+                        onEditClick = { task -> navController.navigate("add?taskId=${task.id}") }
+                    )
+                }
+
+                // 2. Add/Edit Screen
+                composable(
+                    route = "add?taskId={taskId}",
+                    arguments = listOf(navArgument("taskId") {
+                        type = NavType.IntType
+                        defaultValue = -1
+                    })
+                ) { backStackEntry ->
+                    val taskId = backStackEntry.arguments?.getInt("taskId")
+
+                    AddTodoScreen(
+                        viewModel = viewModel,
+                        taskId = taskId,
+                        onBackClick = { navController.popBackStack() }
+                    )
                 }
             }
         }
