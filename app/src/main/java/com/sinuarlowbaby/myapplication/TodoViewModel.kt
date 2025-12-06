@@ -24,6 +24,11 @@ class TodoViewModel(private val dao: TodoDao) : ViewModel() {
         _isDarkTheme.value = isDark
     }
 
+    fun restoreTodo(todo: TodoItem) = viewModelScope.launch {
+        dao.upsertTodo(todo)
+    }
+
+
     fun toggleTheme() {
         _isDarkTheme.value = !_isDarkTheme.value
     }

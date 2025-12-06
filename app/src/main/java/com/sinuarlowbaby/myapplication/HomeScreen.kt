@@ -35,6 +35,40 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
+import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+// Same color every time for a given category/label
+fun categoryColorFor(label: String): Color = when (label) {
+    "Personal"  -> Color(0xFF6366F1) // Indigo
+    "Work"      -> Color(0xFFEC4899) // Pink
+    "Study"     -> Color(0xFFF97316) // Orange
+    "Groceries" -> Color(0xFF22C55E) // Green
+    "Health"    -> Color(0xFF06B6D4) // Cyan
+    else        -> Color(0xFF9CA3AF) // Gray fallback
+}
+
+fun priorityText(priority: Int): String = when (priority) {
+    0 -> "Low"
+    1 -> "Medium"
+    else -> "High"
+}
+
+fun priorityColor(priority: Int): Color = when (priority) {
+    0 -> Color(0xFF22C55E) // Green
+    1 -> Color(0xFFF97316) // Orange
+    else -> Color(0xFFEF4444) // Red
+}
+
+@Composable
+fun rememberFormattedTime(timestamp: Long): String {
+    return remember(timestamp) {
+        val formatter = SimpleDateFormat("dd MMM, h:mm a", Locale.getDefault())
+        formatter.format(Date(timestamp))
+    }
+}
 
 // ---- LIGHT COLORS ----
 val LightBackground = Color(0xFFF7F8FA)
@@ -47,6 +81,8 @@ val DarkBackground = Color(0xFF0B1220)
 val DarkTitle = Color(0xFFE5E7EB)
 val DarkSubtitle = Color(0xFF9CA3AF)
 val DarkCard = Color(0xFF111827)
+
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -83,6 +119,10 @@ fun HomeScreen(
         label = "themeScale"
     )
 
+    val snackbarHostState = remember { SnackbarHostState() }
+
+
+
     val backgroundColor = if (isDark) DarkBackground else LightBackground
     val titleColor = if (isDark) DarkTitle else LightTitle
     val subtitleColor = if (isDark) DarkSubtitle else LightSubtitle
@@ -98,10 +138,15 @@ fun HomeScreen(
         window.statusBarColor = backgroundColor.toArgb()
     }
 
+    var recentlyDeletedTodo by remember { mutableStateOf<TodoItem?>(null) }
+    val scope = rememberCoroutineScope()
+
     val filterOptions = listOf("All", "Personal", "Work", "Study", "Groceries", "Health")
 
     Scaffold(
+
         containerColor = backgroundColor,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
             FloatingActionButton(
                 onClick = onAddClick,
@@ -139,7 +184,7 @@ fun HomeScreen(
                         )
                     )
                     Text(
-                        text = "Stay productive today",
+                        text = "",
                         fontSize = 13.sp,
                         color = subtitleColor
                     )
@@ -282,13 +327,33 @@ fun HomeScreen(
                 items(items = todoList, key = { it.id }) { item ->
 
                     val dismissState = rememberSwipeToDismissBoxState(
-                        confirmValueChange = {
-                            if (it == SwipeToDismissBoxValue.EndToStart) {
+                        confirmValueChange = { value ->
+                            if (value == SwipeToDismissBoxValue.EndToStart) {
+
+                                haptic.performHapticFeedback(HapticFeedbackType.Confirm)
+                                recentlyDeletedTodo = item
                                 viewModel.deleteTodo(item)
+                                scope.launch {
+                                    val result = snackbarHostState.showSnackbar(
+                                        message = "Task deleted",
+                                        actionLabel = "Undo",
+                                        duration = SnackbarDuration.Short
+                                    )
+                                    if (result == SnackbarResult.ActionPerformed) {
+                                        recentlyDeletedTodo?.let { todo ->
+                                            viewModel.restoreTodo(todo)
+                                        }
+                                    }
+                                    // Clear the recently deleted item after snackbar is dismissed or action is taken
+                                    recentlyDeletedTodo = null
+                                }
+
+
                                 true
                             } else false
                         }
                     )
+
 
                     SwipeToDismissBox(
                         state = dismissState,
@@ -339,6 +404,10 @@ fun TodoItemCard(
     subtitleColor: Color,
     cardColor: Color
 ) {
+    val categoryColor = categoryColorFor(item.label)
+    val priorityLabel = priorityText(item.priority)
+    val createdAtText = rememberFormattedTime(item.date)
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -364,6 +433,7 @@ fun TodoItemCard(
                     .weight(1f)
                     .padding(start = 10.dp)
             ) {
+                // Title
                 Text(
                     text = item.title,
                     fontSize = 17.sp,
@@ -372,29 +442,50 @@ fun TodoItemCard(
                     textDecoration = if (item.isDone) TextDecoration.LineThrough else null
                 )
 
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(9.dp)
-                            .clip(CircleShape)
-                            .background(
-                                when (item.priority) {
-                                    0 -> Color(0xFF22C55E)
-                                    1 -> Color(0xFFFACC15)
-                                    else -> Color(0xFFEF4444)
-                                }
-                            )
-                    )
+                // Bottom row: left = category, right = priority + time
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
 
-                    Spacer(modifier = Modifier.width(8.dp))
+                    // LEFT: category dot + label
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(9.dp)
+                                .clip(CircleShape)
+                                .background(categoryColor)
+                        )
 
-                    Text(
-                        text = item.label,
-                        fontSize = 12.sp,
-                        color = subtitleColor
-                    )
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        Text(
+                            text = item.label,
+                            fontSize = 12.sp,
+                            color = subtitleColor
+                        )
+                    }
+
+                    // RIGHT: priority + created time
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = priorityLabel,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = priorityColor(item.priority)
+                        )
+
+                        Spacer(modifier = Modifier.width(12.dp))
+
+                        Text(
+                            text = createdAtText,
+                            fontSize = 11.sp,
+                            color = subtitleColor
+                        )
+                    }
                 }
             }
         }
